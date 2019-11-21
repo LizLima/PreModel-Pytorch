@@ -18,37 +18,47 @@ device = torch.device('cuda')
 
 laten_sapce = 256
 lr          = 0.001
-num_epochs  = 500
-batch_size  = 1
+num_epochs  = 250
+batch_size  = 128
 image_size  = 128
-print_epoch = 25
+print_epoch = 1
 
 ################################################
 # DATASET 
 ################################################
-path = '/home/liz/Documents/Data/VGGFace'
-path_result= '/home/liz/Documents/Model-Pretrained/results'
+path = '/media/liz/Files/data/VGGface'
+path_lfw = '/media/liz/Files/data/lfw'
+path_result= '/media/liz/Files/Model-Pretrained/results'
 # Create the dataset
 train_dataset = datasets.ImageFolder(root=path + '/vggface2_train/train',
-                           transform=transforms.Compose([
-                               transforms.Resize(image_size),
-                               transforms.CenterCrop(image_size),
-                               transforms.ToTensor(),
-                           ]))
+                            transform=transforms.Compose([
+                                transforms.Resize(image_size),
+                                transforms.CenterCrop(image_size),
+                                transforms.ToTensor(),
+                            ]))
 
 test_dataset = datasets.ImageFolder(root=path + '/vggface2_test/test',
                            transform=transforms.Compose([
                                transforms.Resize(image_size),
-                               transforms.CenterCrop(image_size),
-                               transforms.ToTensor(),
-                           ]))                         
-# Create the dataloader
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-#                                          shuffle=True)
+                                transforms.CenterCrop(image_size),
+                                transforms.ToTensor(),
+                            ])) 
 
-# train_size = int(0.7 * len(dataset))
-# test_size = len(dataset) - train_size
-# train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+# Create dataset
+#dataset = datasets.ImageFolder(root=path_lfw,
+ #                          transform=transforms.Compose([
+#                               transforms.Resize(image_size),
+ #                              transforms.CenterCrop(image_size),
+ #                              transforms.ToTensor(),
+  #                         ]))
+
+# Create the dataloader
+#dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+ #                                        shuffle=True)
+
+#train_size = int(0.7 * len(dataset))
+#test_size = len(dataset) - train_size
+#train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
@@ -68,8 +78,10 @@ plt.show()
 class_train = train_dataset.classes
 class_test  = test_dataset.classes
 num_classes = len(class_train) + len(class_test)
+#class_data = dataset.classes
+#num_classes = len(class_data)
+
 model       = modelgen.Generator(num_classes).to(device)
-model.apply(modelgen.weights_init)
 optimizer   = optim.Adam(model.parameters(), lr=lr)
 
 lossMse     = nn.MSELoss()
@@ -98,26 +110,29 @@ def train(epoch):
         label       = data[1].to(device)
         # update the gradients to zero
         optimizer.zero_grad()
-        features_gen, image_synt = model(image)
-        loss_mse    = lossMse(image_synt, image)
-        loss_ce     = lossCE(features_gen, label)
-        # update the weights
-        loss_total = loss_ce + loss_mse
+        image_synt = model(image)
+        loss_mse   = lossMse(image_synt, image)
+        loss_total = loss_mse
+
         loss_total.backward()
         optimizer.step()
 
         train_loss += loss_total.item()
 
-        progress.set_description("Train epoch: %d, MSE: %.5f , CE: %.5f , T: %.5f " % (epoch, loss_mse, loss_ce, train_loss))
+        progress.set_description("Train epoch: %d, MSE: %.5f " % (epoch, loss_mse))
     
     # Save model
     if (epoch + 1) % print_epoch == 0:
 
         # Save the model
         # https://discuss.pytorch.org/t/loading-a-saved-model-for-continue-training/17244/2
-        state = {'epoch': epoch + 1, 'state_dict': model.state_dict(),
-             'optimizer': optimizer.state_dict()}
-        torch.save(state, path_result + "/vgg_checkpoint" + str(epoch) +"_" + ".pth.tar" ) 
+        state = {   
+                    'epoch': epoch + 1, 
+                    'state_dict_encoder': model.encoder.state_dict(),
+                    'state_dict_decoder': model.decoder.state_dict(),
+                    'optimizer': optimizer.state_dict()
+                }
+        torch.save(state, path_result + "/resnet_checkpoint" + str(epoch) +"_" + ".pth.tar" ) 
 
     return train_loss
 ################################################
@@ -136,18 +151,18 @@ def test(epoch):
             # label   = one_hot(data[1]).to(device)
             label       = data[1].to(device)
 
-            features_gen, image_synt = model(image)
+            image_synt = model(image)
             loss_mse    = lossMse(image_synt, image)
-            loss_ce     = lossCE(features_gen, label)
             # update the weights
-            loss_total = loss_ce + loss_mse
+            loss_total = loss_mse
             
             test_loss += loss_total.item()
 
-            progress.set_description("Test epoch: %d, MSE: %.5f , CE: %.5f , T: %.5f " % (epoch, loss_mse, loss_ce, train_loss))
+            progress.set_description("Test epoch: %d, MSE: %.5f " % (epoch, loss_mse))
         
-        vutils.save_image(image_synt.data, path_result + '/vgg_synt_%03d.jpg' % epoch, normalize=True)
-        vutils.save_image(image.data, path_result + '/vgg_input_%03d.jpg' % epoch, normalize=True)
+        if (epoch + 1) % print_epoch == 0:
+            vutils.save_image(image_synt.data, path_result + '/resnet_synt_%03d.jpg' % epoch, normalize=True)
+            vutils.save_image(image.data, path_result + '/resnet_input_%03d.jpg' % epoch, normalize=True)
     return test_loss
 
 best_test_loss = float('inf')
@@ -167,19 +182,19 @@ for e in range(num_epochs):
 
 #plot 
 fig = plt.figure()
-x = np.arange(num_epochs + 1)
+x = np.arange(num_epochs)
 ax = plt.subplot(111)
 ax.plot(x, loss_Train, 'mediumvioletred', label='Generator Training')
 ax.plot(x, loss_Test, 'pink', label='Generator Test')
 
 plt.title('Function loss')
 ax.legend()
-fig.savefig(path_result + '/vgg_plot' + str(num_epochs+1) + '.png')
+fig.savefig(path_result + '/resnet_plot' + str(num_epochs+1) + '.png')
 
 # Save loss an test values to plot comparison
-fichero = open(path_result + '/files_vgg19_train.pckl', 'wb')
+fichero = open(path_result + '/files_resnet_train.pckl', 'wb')
 pickle.dump(loss_Train, fichero)
 fichero.close()
-fichero = open(path_result + '/files_vgg19_test.pckl', 'wb')
+fichero = open(path_result + '/files_resnet_test.pckl', 'wb')
 pickle.dump(loss_Test, fichero)
 fichero.close()
