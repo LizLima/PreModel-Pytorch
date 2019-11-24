@@ -1,4 +1,4 @@
-Folder: Pretrained-model/Test1
+Folder: Pretrained-model/Test2
 ---------------------------
 File: trainv2.py
 
