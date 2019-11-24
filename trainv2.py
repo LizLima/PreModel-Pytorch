@@ -90,7 +90,7 @@ pixel_wise = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = False
+flag = True
 start_epoch = 0
 if flag:
   model, optimizer, start_epoch = utils.load_checkpoint(model, optimizer, path_pretrained)
@@ -116,7 +116,7 @@ def train(epoch):
         ## Train with all-real batch
         model_dis.zero_grad()
         b_size = image.size(0)
-        label = torch.full((b_size,), 1, device=device)
+        label = torch.ones(b_size, 1, 1, 1).to(device)
         output = model_dis(frontal).view(-1)
         errD_real = criterion(output, label)
         errD_real.backward(retain_graph=True)
@@ -154,6 +154,7 @@ def train(epoch):
 
 
         progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
+    
     if (epoch + 1) % print_epoch == 0:
         vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
         vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)

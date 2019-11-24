@@ -4,7 +4,7 @@ File: trainv2.py
 
 Model
 ----------------------------
-Encoder : VGG19bn (Pretrained= True | Pretrained face: No)
+Encoder : VGG19bn (Pretrained= True | Pretrained face: Yes)
 Decoder: 
 
 Discriminator: 
