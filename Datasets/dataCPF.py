@@ -74,7 +74,7 @@ class DataSetTrain(Dataset):
 
         # Load txt
         with open(self.data_root + "list_name.txt", 'r') as fp:
-            line = fp.readline()
+            # line = fp.readline()
             line = fp.readline() # not first line
             while line:
                 self.classes.append(line.strip())

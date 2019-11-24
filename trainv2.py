@@ -1,12 +1,13 @@
 # Model pretrained 
-# Model   : VGG19n
+# Model   : VGG1919n
 # Dataser : LFW
 # epoch   : 200
 # z dim   : 256
-
+# Type    : GAN
+# Loss    : MinMax
 import utils as utils
-import modelv2 as modelGen
-import discriminator as modelDis
+import Models.modelv2 as modelGen
+import Models.discriminator as modelDis
 import Datasets.dataCPF as datacpfs
 
 import torch
@@ -19,8 +20,9 @@ import torchvision.utils as vutils
 import pickle
 from tqdm.autonotebook import tqdm
 import os
+from torchvision import datasets, transforms
 
-device = torch.device('cpu')
+device = torch.device('cuda')
 
 
 ################################################
@@ -28,35 +30,33 @@ device = torch.device('cpu')
 ################################################
 
 laten_sapce = 256
-lr          = 0.001
-num_epochs  = 200
-batch_size  = 64
+lr          = 0.0002
+lr_d        = 0.0002
+num_epochs  = 500
+batch_size  = 32
 image_size  = 128
-print_epoch = 25
+print_epoch = 5
 
 ################################################
 # DATASET 
 ################################################
-path = '/home/liz/Documents/Data/VGGFace'
-path_lfw = "/content/gdrive/My Drive/Maestria/Face/lfw"
-path_cpf = "/home/liz/Documents/Data/cfp-dataset/Data/"
-path_result= '/media/liz/Files/Model-Pretrained/GAN_64batch'
-# Create the dataset
-# train_dataset = datasets.ImageFolder(root=path + '/vggface2_train/train',
-#                            transform=transforms.Compose([
-#                                transforms.Resize(image_size),
-#                                transforms.CenterCrop(image_size),
-#                                transforms.ToTensor(),
-#                            ]))
 
-# test_dataset = datasets.ImageFolder(root=path + '/vggface2_test/test',
+path_lfw        = "/home/liz/Documents/Data/lfw"
+path_cpf        = "/home/liz/Documents/Data/cfp-dataset/Data/"
+path_result     = "/media/liz/Files/Model-Pretrained/GAN_64batch"
+path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
+name_checkpoint = "vgg19_gan_checkpoint"                      
+# Create the dataloader CPF
+data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
+
+# Create the dataloader LFW
+# data = datasets.ImageFolder(root=path_lfw,
 #                            transform=transforms.Compose([
 #                                transforms.Resize(image_size),
 #                                transforms.CenterCrop(image_size),
 #                                transforms.ToTensor(),
-#                            ]))                         
-# Create the dataloader
-data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
+#                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+#                            ]))
 
 train_size = int(0.7 * len(data))
 test_size = len(data) - train_size
@@ -83,18 +83,17 @@ model_dis   = modelDis.Discriminator().to(device)
 model_dis.apply(utils.weights_init)
 
 optimizer   = optim.Adam(model.parameters(), lr=lr)
-optimizer_d = optim.Adam(model_dis.parameters(), lr=lr)
+optimizer_d = optim.Adam(model_dis.parameters(), lr=lr_d)
 
-lossMse     = nn.MSELoss()
-lossBCE     = nn.BCELoss()
-
+criterion = nn.BCELoss()
+pixel_wise = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = True
+flag = False
 start_epoch = 0
 if flag:
-  model, optimizer, start_epoch = utils.load_checkpoint(model, optimizer, "/media/liz/Files/Model-Pretrained/GAN_64batch/checkpoint199.pth.tar")
+  model, optimizer, start_epoch = utils.load_checkpoint(model, optimizer, path_pretrained)
 
 
 ################################################
@@ -107,60 +106,70 @@ def train(epoch):
     trainD_loss = 0
     progress = tqdm(enumerate(trainloader), desc="Train", total=len(trainloader))
     for x in progress:
-        data    = x[1]
-        image   = data[0].to(device)
-        label       = data[1].to(device)
-        
-        ######################
-        # Train discriminator
-        ######################
-        optimizer_d.zero_grad()
+        data = x[1]
+        image   = data['profile'].to(device)
+        frontal   = data['frontal'].to(device)
+        # image = data[0].to(device)
+         ############################
+        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        ###########################
+        ## Train with all-real batch
+        model_dis.zero_grad()
+        b_size = image.size(0)
+        label = torch.full((b_size,), 1, device=device)
+        output = model_dis(frontal).view(-1)
+        errD_real = criterion(output, label)
+        errD_real.backward(retain_graph=True)
+        D_x = output.mean().item()
 
-        d_real      = model_dis(image)
-        l_real      = torch.ones(batch_size).to(device)
-        e_real      = lossBCE(d_real, l_real)
-
-        # Generate image
-        image_synt  = model(image)
-        d_syn       = model_dis(image_syn)
-        l_syn       = torch.zeros(batch_size).to(device)
-        e_syn       = lossBCE(d_syn, lg_real)
-
-        error_dis   = e_real + e_syn
-        error_dis.backward()
+        ## Train with all-fake batch
+        # Generate fake image batch with G
+        fake = model(image)
+        label.fill_(0)
+        output = model_dis(fake.detach()).view(-1)
+        errD_fake = criterion(output, label)
+        errD_fake.backward(retain_graph=True)
+        D_G_z1 = output.mean().item()
+        errD = errD_real + errD_fake
+        # Update D
         optimizer_d.step()
 
-        ######################
-        # Train generator
-        ######################
-        optimizer.zero_grad()
-        image_synt  = model(image)
-        dg_syn      = model_dis(image_size)
-        lg_real     = torch.ones(batch_size).to(device)
-        eg_syn      = lossBCE(dg_syn, lg_real)
+        ############################
+        # (2) Update G network: maximize log(D(G(z)))
+        ###########################
+        model.zero_grad()
+        label.fill_(1)  # fake labels are real for generator cost
+        output = model_dis(fake).view(-1)
+        errG_g = criterion(output, label)
+        errG_g.backward(retain_graph=True)
+        D_G_z2 = output.mean().item()
 
-        # Generator error
-        error_gen   = eg_syn
-        error_gen.backward()
+        # Pixel wise loss
+        errG_wise = pixel_wise(fake, frontal)
+        errG_wise.backward()
+        errG = errG_g + errG_wise
+        # Update G
         optimizer.step()
-        
-        trainG_loss += error_gen.item()
-        trainD_loss += error_dis.item()
 
-        progress.set_description("Epoch: %d, G: %.3f G: %.3f  " % (epoch, error_dis.item(), error_gen.item()))
-    
+
+
+        progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
+    if (epoch + 1) % print_epoch == 0:
+        vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
+        vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
     # Save model
-    # if (epoch + 1) % print_epoch == 0:
+    if (epoch + 1) % print_epoch == 0:
 
-    #     # Save the model
-    #     # https://discuss.pytorch.org/t/loading-a-saved-model-for-continue-training/17244/2
-    #     state = {   
-    #                 'epoch': epoch + 1, 
-    #                 'state_dict_encoder': model.encoder.state_dict(),
-    #                 'state_dict_decoder': model.decoder.state_dict(),
-    #                 'optimizer': optimizer.state_dict()
-    #             }
-    #     torch.save(state, path_result + "/resnet50_checkpoint" + str(epoch) +"_" + ".pth.tar" ) 
+        # Save the model
+        # https://discuss.pytorch.org/t/loading-a-saved-model-for-continue-training/17244/2
+        state = {   
+                    'epoch': epoch + 1, 
+                    'state_dict_disc': model_dis.state_dict(),
+                    'state_dict_gen': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'optimizer_dis': optimizer_d.state_dict()
+                }
+        torch.save(state, path_result + "/" + name_checkpoint + str(epoch) + ".pth.tar" ) 
 
     return trainG_loss, trainD_loss
 ################################################
@@ -176,21 +185,23 @@ def test(epoch):
     # progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
     with torch.no_grad():
         for x in enumerate(testloader):
-            data    = x[1]
-            image   = data[0].to(device)
+            
+            data = x[1]
+            # image   = data['profile'].to(device)
+            image = data[0].to(device)
 
             ######################
             # Train discriminator
             ######################
             
             d_real      = model_dis(image)
-            l_real      = torch.ones(batch_size).to(device)
+            l_real      = torch.ones(d_real.size(0), 1, 1, 1).to(device)
             e_real      = lossBCE(d_real, l_real)
             # Generate image
             image_synt  = model(image)
-            d_syn       = model_dis(image_syn)
-            l_syn       = torch.zeros(batch_size).to(device)
-            e_syn       = lossBCE(d_syn, lg_)
+            d_syn       = model_dis(image_synt)
+            l_syn       = torch.zeros(d_syn.size(0), 1, 1, 1).to(device)
+            e_syn       = lossBCE(d_syn, l_syn)
 
             error_dis   = e_real + e_syn
             
@@ -198,8 +209,8 @@ def test(epoch):
             # Train generator
             ######################
             image_synt  = model(image)
-            dg_syn      = model_dis(image_size)
-            lg_real     = torch.ones(batch_size).to(device)
+            dg_syn      = model_dis(image_synt)
+            lg_real     = torch.ones(dg_syn.size(0), 1, 1, 1).to(device)
             eg_syn      = lossBCE(dg_syn, lg_real)
 
             # Generator error
@@ -210,8 +221,8 @@ def test(epoch):
 
             # progress.set_description("Test epoch: %d, MSE: %.5f , CE: %.5f , T: %.5f  " % (epoch, loss_mse, loss_ce, train_loss))
         if (epoch + 1) % print_epoch == 0:
-          vutils.save_image(image_synt.data, path_result + '/resnet50_synt_%03d.jpg' % epoch, normalize=True)
-          vutils.save_image(image.data, path_result + '/resnet50_input_%03d.jpg' % epoch, normalize=True)
+          vutils.save_image(image_synt.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
+          vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
     return testG_loss, testD_loss
 
 
@@ -220,23 +231,26 @@ patience_counter = 0
 
 loss_Train = []
 loss_Test = []
+
+loss_Train.append(("trainG_loss", "trainD_loss"))
+loss_Test.append(("testG_loss", "testD_loss"))
 for e in range(num_epochs):
 
     trainG_loss, trainD_loss = train(e)
-    testG_loss, testD_loss = test(e)
+    # testG_loss, testD_loss = test(e)
 
     trainG_loss /= len(trainloader)
     trainD_loss /= len(trainloader)
 
-    testG_loss /= len(testloader)
-    testD_loss /= len(testloader)
+    # testG_loss /= len(testloader)
+    # testD_loss /= len(testloader)
 
     loss_Train.append((trainG_loss, trainD_loss))
-    loss_Test.append((testG_loss, testD_loss))
+    # loss_Test.append((testG_loss, testD_loss))
 
-fichero = open(path_result + '/files_vgg19_train.pckl', 'wb')
+fichero = open(path_result + '/files_gan_train.pckl', 'wb')
 pickle.dump(loss_Train, fichero)
 fichero.close()
-fichero = open(path_result + '/files_vgg19_test.pckl', 'wb')
-pickle.dump(loss_Test, fichero)
-fichero.close()
+# fichero = open(path_result + '/files_gan_test.pckl', 'wb')
+# pickle.dump(loss_Test, fichero)
+# fichero.close()

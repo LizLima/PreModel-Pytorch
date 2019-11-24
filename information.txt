@@ -1,0 +1,19 @@
+Folder: Pretrained-model/Test1
+---------------------------
+File: trainv2.py
+
+Model
+----------------------------
+Encoder : VGG19bn (Pretrained= True | Pretrained face: No)
+Decoder: 
+
+Discriminator: 
+
+Loss
+------------------------
+Binary Cross Entropy 	factor: 1
+Pixel wise Loss (L1)		factor: 1
+
+Dataset
+-----------------------
+CPF w/o 

@@ -8,80 +8,93 @@ import numpy as np
 import torchvision.utils as vutils
 import pickle
 import torchvision.models as models
+import Datasets.dataCPF as datacpfs
 
 device = torch.device('cpu')
 ################################################
 # DATASET 
 ################################################
-path = '/media/liz/Files/data/VGGface'
-path_lfw = "/home/liz/Documents/Data/lfw"
-path_result= '/home/liz/Documents/Model-Pretrained/results'
-# Create the dataset
-train_dataset = datasets.ImageFolder(root=path + '/vggface2_train/train',
-                           transform=transforms.Compose([
-                               transforms.Resize(128),
-                               transforms.CenterCrop(128),
-                               transforms.ToTensor(),
-                           ]))
+path_cpf = "/home/liz/Documents/Data/cfp-dataset/Data/"
 
-test_dataset = datasets.ImageFolder(root=path + '/vggface2_test/test',
-                           transform=transforms.Compose([
-                               transforms.Resize(128),
-                               transforms.CenterCrop(128),
-                               transforms.ToTensor(),
-                           ]))                         
+# Create the dataset
+data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
+
+train_size = int(0.7 * len(data))
+test_size = len(data) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(data, [train_size, test_size])
 
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True)
 testloader  = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=True)
 
 # config VGGface
-class_train = train_dataset.classes
-class_test  = test_dataset.classes
-num_classes = len(class_train) + len(class_test)
-# Plot some training images
-real_batch = next(iter(trainloader))
-plt.figure(figsize=(8,8))
-plt.axis("off")
-plt.title("Training Images")
-plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
-plt.show()
+list_class = data.classes
+num_classes = len(list_class)
+
 
 model = models.vgg19(pretrained=True)
+for param in model.parameters():
+    param.requires_grad = False
+
 num_ftrs = model.classifier[6].in_features
-# convert all the layers to list and remove the last one
-features = list(model.classifier.children())[:-1]
-## Add the last layer based on the num of classes in our dataset
-features.extend([nn.Linear(num_ftrs, len(class_train))])
-## convert it into container and add it to our model class.
-model.classifier = nn.Sequential(*features)
+model.classifier[6] = nn.Sequential(
+                      nn.Linear(num_ftrs, 256), 
+                      nn.ReLU(), 
+                      nn.Dropout(0.4),
+                      nn.Linear(256, num_classes),                   
+                      nn.Softmax(dim=1))
 
 loss = nn.CrossEntropyLoss()
-# Freeze training for all layers
-for param in model.features.parameters():
-    param.require_grad = False
-
 model.to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-for i, x in enumerate(trainloader):
+epochs = 250
+for epoch in range(epochs):
 
-    print("data")
-    data    = x[0].to(device)
-    label   = x[1].to(device)
+    train_loss  = 0
+    count_true  = 0
+    count_total = 0
+    for i, x in enumerate(trainloader):
 
-    output = model(data)
+        data    = x['frontal'].to(device)
+        label   = x['label'].to(device)
+        name    = x['name']
+        optimizer.zero_grad()
+        output      = model(data)
+        value_loss  = loss(output, label)
+        value_loss.backward()
+        optimizer.step()
 
-    # calculate rank 1
-    dist = loss(output, label)
+        train_loss += value_loss.item()
 
-    # dictionarry
-    result = {} # id = value / value classid
+        # Calculate rank for each image
+        results     = {}
+        # calculate rank 1
+        output      = model(data[0].unsqueeze(0))
+        for idx, n_class in enumerate(list_class):
 
-    for idclass, clasdes in enumerate(class_train):
-        print("")
-        result
+            # Calculate loss class idx and ouput
+            lbl = torch.tensor([idx])
+            value = loss(output, lbl).item()
+            results[value] = n_class
+        
+        list_items = []
+        for key in results:
+            list_items.append((key, results[key]))
+        list_items = sorted(list_items)
+
+        if list_class[label[0]]==list_items[0][1]:
+            count_true +=1
+        count_total += 1
     
-    for idclass, value in enumerate(output[0]):
-        result[value] = idclass
+    print("Epoch: %d, Ce: %.5f " % (epoch, train_loss/len(trainloader)) )
+    print("Example ")
+    print("Real label : ", list_class[label[0]], "\tPred. label : " , list_items[0][1])
+    print("True: ", count_true,  "Total: ", count_total)
+    # print("Real value : ", value_loss.item(), "\tPred. value : ", list_items[0][0])
+    print("-----------------------------------------------------------------------------------")
+    # plt.imshow(data[0].permute(1,2,0))
+
+
 
 
     

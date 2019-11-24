@@ -18,8 +18,8 @@ def load_checkpoint(model, optimizer, filename='checkpoint.pth.tar'):
         print("=> loading checkpoint '{}'".format(filename))
         checkpoint = torch.load(filename)
         start_epoch = checkpoint['epoch']
-        model.encoder.load_state_dict(checkpoint['state_dict_encoder'])
-        model.decoder.load_state_dict(checkpoint['state_dict_decoder'])
+        # model.encoder.load_state_dict(checkpoint['state_dict_encoder'])
+        model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         print("=> loaded checkpoint '{}' (epoch {})"
                   .format(filename, checkpoint['epoch']))
