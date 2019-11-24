@@ -12,7 +12,7 @@ Discriminator:
 Loss
 ------------------------
 Binary Cross Entropy 	factor: 1
-Pixel wise Loss (L1)		factor: 1
+Pixel wise Loss (L1)		factor: 10
 
 Dataset
 -----------------------

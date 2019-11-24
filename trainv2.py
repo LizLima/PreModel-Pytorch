@@ -110,7 +110,7 @@ def train(epoch):
         image   = data['profile'].to(device)
         frontal   = data['frontal'].to(device)
         # image = data[0].to(device)
-         ############################
+        ############################
         # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
         ###########################
         ## Train with all-real batch
@@ -145,7 +145,7 @@ def train(epoch):
         D_G_z2 = output.mean().item()
 
         # Pixel wise loss
-        errG_wise = pixel_wise(fake, frontal)
+        errG_wise = 10*pixel_wise(fake, frontal)
         errG_wise.backward()
         errG = errG_g + errG_wise
         # Update G
@@ -155,9 +155,9 @@ def train(epoch):
 
         progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
     
-    if (epoch + 1) % print_epoch == 0:
-        vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
-        vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
+    # if (epoch + 1) % print_epoch == 0:
+    #     vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
+    #     vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
     # Save model
     if (epoch + 1) % print_epoch == 0:
 
@@ -204,26 +204,29 @@ def test(epoch):
             l_syn       = torch.zeros(d_syn.size(0), 1, 1, 1).to(device)
             e_syn       = lossBCE(d_syn, l_syn)
 
-            error_dis   = e_real + e_syn
+            errD   = e_real + e_syn
             
             ######################
             # Train generator
             ######################
-            image_synt  = model(image)
             dg_syn      = model_dis(image_synt)
             lg_real     = torch.ones(dg_syn.size(0), 1, 1, 1).to(device)
-            eg_syn      = lossBCE(dg_syn, lg_real)
+            errG_g      = lossBCE(dg_syn, lg_real)
 
             # Generator error
-            error_gen   = eg_syn
-            
-            testG_loss += error_gen.item()
+
+            # Pixel wise loss
+            errG_wise = 10*pixel_wise(fake, frontal)
+            errG = errG_g + errG_wise
+
+            testG_loss += errG.item()
             testD_loss += error_dis.item()
 
-            # progress.set_description("Test epoch: %d, MSE: %.5f , CE: %.5f , T: %.5f  " % (epoch, loss_mse, loss_ce, train_loss))
+            progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
         if (epoch + 1) % print_epoch == 0:
-          vutils.save_image(image_synt.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
-          vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
+            vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
+            vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
+
     return testG_loss, testD_loss
 
 
@@ -238,20 +241,20 @@ loss_Test.append(("testG_loss", "testD_loss"))
 for e in range(num_epochs):
 
     trainG_loss, trainD_loss = train(e)
-    # testG_loss, testD_loss = test(e)
+    testG_loss, testD_loss = test(e)
 
     trainG_loss /= len(trainloader)
     trainD_loss /= len(trainloader)
 
-    # testG_loss /= len(testloader)
-    # testD_loss /= len(testloader)
+    testG_loss /= len(testloader)
+    testD_loss /= len(testloader)
 
     loss_Train.append((trainG_loss, trainD_loss))
-    # loss_Test.append((testG_loss, testD_loss))
+    loss_Test.append((testG_loss, testD_loss))
 
 fichero = open(path_result + '/files_gan_train.pckl', 'wb')
 pickle.dump(loss_Train, fichero)
 fichero.close()
-# fichero = open(path_result + '/files_gan_test.pckl', 'wb')
-# pickle.dump(loss_Test, fichero)
-# fichero.close()
+fichero = open(path_result + '/files_gan_test.pckl', 'wb')
+pickle.dump(loss_Test, fichero)
+fichero.close()
