@@ -5,6 +5,7 @@ File: trainv2.py
 Model
 ----------------------------
 Encoder : VGG (Pretrained= True | Pretrained face: No/ VGGFace)
+          w/o Freeze layer
 Decoder: 
 
 Discriminator: 
@@ -16,3 +17,15 @@ Binary Cross Entropy 	factor: 1
 Dataset
 -----------------------
 CPF w/o data augmentation
+
+################################################
+# CONFIG 
+################################################
+
+laten_sapce = 256
+lr          = 0.0002
+lr_d        = 0.0002
+num_epochs  = 500
+batch_size  = 32
+image_size  = 128
+print_epoch = 5
