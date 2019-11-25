@@ -31,7 +31,7 @@ device = torch.device('cuda')
 
 laten_sapce = 256
 lr          = 0.0002
-lr_d        = 0.0001
+lr_d        = 0.0002
 num_epochs  = 500
 batch_size  = 32
 image_size  = 128
@@ -79,19 +79,20 @@ testloader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, s
 class_data = data.classes
 
 num_classes = len(class_data)
-model       = modelGen.Generator(num_classes).to(device)
-model_dis   = modelDis.Discriminator().to(device)
-model_dis.apply(utils.weights_init)
+model_G       = modelGen.Generator(num_classes).to(device)
+model_D       = modelDis.Discriminator().to(device)
+model_D.apply(utils.weights_init)
 
-optimizer   = optim.Adam(model.parameters(), lr=lr)
-optimizer_d = optim.Adam(model_dis.parameters(), lr=lr_d)
+optimizer_G = optim.Adam(model_G.parameters(), lr=lr)
+optimizer_D = optim.Adam(model_D.parameters(), lr=lr_d)
 
-criterion = nn.BCELoss()
-pixel_wise = nn.L1Loss(reduction='mean')
+criterion   = nn.BCELoss()
+pixel_wise  = nn.L1Loss(reduction='mean')
+
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = True
+flag = False
 start_epoch = 0
 if flag:
   model, optimizer, start_epoch = utils.load_checkpoint(model, optimizer, path_pretrained)
@@ -102,63 +103,65 @@ if flag:
 ################################################
 
 def train(epoch):
-    model.train()
+
+    model_G.train()
+    model_D.train()
+
     trainG_loss = 0
     trainD_loss = 0
+
+    image       = None
+    fake        = None
+
     progress = tqdm(enumerate(trainloader), desc="Train", total=len(trainloader))
     for x in progress:
+
         data = x[1]
         image   = data['profile'].to(device)
         frontal   = data['frontal'].to(device)
-        # image = data[0].to(device)
+        
         ############################
         # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
         ###########################
         ## Train with all-real batch
-        model_dis.zero_grad()
-        b_size = image.size(0)
-        label = torch.ones(b_size, 1, 1, 1).to(device)
-        output = model_dis(frontal).view(-1)
-        errD_real = criterion(output, label)
-        errD_real.backward(retain_graph=True)
-        D_x = output.mean().item()
+        optimizer_D.zero_grad()
 
-        ## Train with all-fake batch
-        # Generate fake image batch with G
-        fake = model(image)
+        label = torch.ones(image.size(0), 1, 1, 1).to(device)
+        output = model_D(frontal)
+        errD_real = criterion(output, label)
+        errD_real.backward()
+       
+        ## Train with fake image
+        fake = model_G(image)
         label.fill_(0)
-        output = model_dis(fake.detach()).view(-1)
+        output = model_D(fake.detach())
         errD_fake = criterion(output, label)
-        errD_fake.backward(retain_graph=True)
-        D_G_z1 = output.mean().item()
+        errD_fake.backward()
+        
         errD = errD_real + errD_fake
-        # Update D
-        optimizer_d.step()
+        optimizer_D.step()
 
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        model.zero_grad()
-        label.fill_(1)  # fake labels are real for generator cost
-        output = model_dis(fake).view(-1)
-        errG_g = criterion(output, label)
-        errG_g.backward(retain_graph=True)
-        D_G_z2 = output.mean().item()
-
-        # Pixel wise loss
-        errG_wise = pixel_wise(fake, frontal)
-        errG_wise.backward()
-        errG = errG_g + errG_wise
-        # Update G
-        optimizer.step()
-
+        optimizer_G.zero_grad()
+        label.fill_(1) 
+        output = model_D(fake)
+        errG = criterion(output, label)
+        errG.backward()
+      
+        optimizer_G.step()
+        
+        trainG_loss += errG.item()
+        trainD_loss += errD.item()
 
 
         progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
     
-    # if (epoch + 1) % print_epoch == 0:
-    #     vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
-    #     vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
+    if (epoch + 1) % print_epoch == 0:
+        vutils.save_image(fake.data, path_result + '/train/synt_%03d.jpg' % epoch, normalize=True)
+        vutils.save_image(image.data, path_result + '/train/input_%03d.jpg' % epoch, normalize=True)
+    
     # Save model
     if (epoch + 1) % print_epoch == 0:
 
@@ -166,83 +169,75 @@ def train(epoch):
         # https://discuss.pytorch.org/t/loading-a-saved-model-for-continue-training/17244/2
         state = {   
                     'epoch': epoch + 1, 
-                    'state_dict_disc': model_dis.state_dict(),
-                    'state_dict_gen': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'optimizer_dis': optimizer_d.state_dict()
+                    'state_dict_D': model_D.state_dict(),
+                    'state_dict_G': model_G.state_dict(),
+                    'optimizer_G': optimizer_G.state_dict(),
+                    'optimizer_D': optimizer_D.state_dict()
                 }
         torch.save(state, path_result + "/" + name_checkpoint + str(epoch) + ".pth.tar" ) 
 
     return trainG_loss, trainD_loss
+
 ################################################
 # TEST 
 ################################################
 def test(epoch):
-    model.eval()
-    model_dis.eval()
+
+    model_G.eval()
+    model_D.eval()
+
     testG_loss   = 0
     testD_loss   = 0
+
     image       = None
-    image_synt  = None
+    fake        = None
+
     progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
+
     with torch.no_grad():
         for x in progress:
             
             data = x[1]
             image   = data['profile'].to(device)
             frontal   = data['frontal'].to(device)
-            # image = data[0].to(device)
-            ############################
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-        
-            b_size = image.size(0)
-            label = torch.ones(b_size, 1, 1, 1).to(device)
-            output = model_dis(frontal).view(-1)
-            errD_real = criterion(output, label)
-            D_x = output.mean().item()
 
-            ## Train with all-fake batch
-            # Generate fake image batch with G
-            fake = model(image)
+            # DISCRIMINATOR
+            label       = torch.ones(image.size(0), 1, 1, 1).to(device)
+            output      = model_D(frontal)
+            errD_real   = criterion(output, label)
+           
+            # Generate fake image
+            fake = model_G(image)
             label.fill_(0)
-            output = model_dis(fake.detach()).view(-1)
-            errD_fake = criterion(output, label)
-            D_G_z1 = output.mean().item()
+            output      = model_D(fake.detach())
+            errD_fake   = criterion(output, label)
+           
             errD = errD_real + errD_fake
-            # Update D
-            optimizer_d.step()
-
-            ############################
-            # (2) Update G network: maximize log(D(G(z)))
-            ###########################
+            
+            # GENERATOR
             label.fill_(1)  # fake labels are real for generator cost
-            output = model_dis(fake).view(-1)
-            errG_g = criterion(output, label)
-            D_G_z2 = output.mean().item()
-
-            # Pixel wise loss
-            errG_wise = pixel_wise(fake, frontal)
-            errG = errG_g + errG_wise
-
+            output = model_D(fake)
+            errG   = criterion(output, label)
+            
             testG_loss += errG.item()
             testD_loss += errD.item()
 
             progress.set_description("Test: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
+
         if (epoch + 1) % print_epoch == 0:
-            vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
-            vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
+            vutils.save_image(fake.data, path_result + '/test/synt_%03d.jpg' % epoch, normalize=True)
+            vutils.save_image(image.data, path_result + '/test/input_%03d.jpg' % epoch, normalize=True)
 
     return testG_loss, testD_loss
 
 
-best_test_loss = float('inf')
-patience_counter = 0
 
 loss_Train = []
 loss_Test = []
 
 loss_Train.append(("trainG_loss", "trainD_loss"))
 loss_Test.append(("testG_loss", "testD_loss"))
+
 for e in range(num_epochs):
 
     trainG_loss, trainD_loss = train(e)

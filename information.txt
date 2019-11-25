@@ -1,10 +1,10 @@
-Folder: Pretrained-model/Test4
+Folder: Pretrained-model/Test1
 ---------------------------
 File: trainv2.py
 
 Model
 ----------------------------
-Encoder : Resnet50 (Pretrained= True | Pretrained face: yes/ VGGFace)
+Encoder : VGG (Pretrained= True | Pretrained face: No/ VGGFace)
 Decoder: 
 
 Discriminator: 
@@ -12,8 +12,7 @@ Discriminator:
 Loss
 ------------------------
 Binary Cross Entropy 	factor: 1
-Pixel wise Loss (L1)		factor: 1
 
 Dataset
 -----------------------
-CPF w/o 
+CPF w/o data augmentation
