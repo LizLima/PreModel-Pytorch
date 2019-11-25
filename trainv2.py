@@ -31,7 +31,7 @@ device = torch.device('cuda')
 
 laten_sapce = 256
 lr          = 0.0002
-lr_d        = 0.0002
+lr_d        = 0.0001
 num_epochs  = 500
 batch_size  = 32
 image_size  = 128
@@ -44,7 +44,8 @@ print_epoch = 5
 path_lfw        = "/home/liz/Documents/Data/lfw"
 path_cpf        = "/home/liz/Documents/Data/cfp-dataset/Data/"
 path_result     = "/media/liz/Files/Model-Pretrained/GAN_64batch"
-path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
+# path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
+path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
 name_checkpoint = "vgg19_gan_checkpoint"                      
 # Create the dataloader CPF
 data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
@@ -145,7 +146,7 @@ def train(epoch):
         D_G_z2 = output.mean().item()
 
         # Pixel wise loss
-        errG_wise = 10*pixel_wise(fake, frontal)
+        errG_wise = pixel_wise(fake, frontal)
         errG_wise.backward()
         errG = errG_g + errG_wise
         # Update G
@@ -183,46 +184,50 @@ def test(epoch):
     testD_loss   = 0
     image       = None
     image_synt  = None
-    # progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
+    progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
     with torch.no_grad():
-        for x in enumerate(testloader):
+        for x in progress:
             
             data = x[1]
-            # image   = data['profile'].to(device)
-            image = data[0].to(device)
+            image   = data['profile'].to(device)
+            frontal   = data['frontal'].to(device)
+            # image = data[0].to(device)
+            ############################
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        
+            b_size = image.size(0)
+            label = torch.ones(b_size, 1, 1, 1).to(device)
+            output = model_dis(frontal).view(-1)
+            errD_real = criterion(output, label)
+            D_x = output.mean().item()
 
-            ######################
-            # Train discriminator
-            ######################
-            
-            d_real      = model_dis(image)
-            l_real      = torch.ones(d_real.size(0), 1, 1, 1).to(device)
-            e_real      = lossBCE(d_real, l_real)
-            # Generate image
-            image_synt  = model(image)
-            d_syn       = model_dis(image_synt)
-            l_syn       = torch.zeros(d_syn.size(0), 1, 1, 1).to(device)
-            e_syn       = lossBCE(d_syn, l_syn)
+            ## Train with all-fake batch
+            # Generate fake image batch with G
+            fake = model(image)
+            label.fill_(0)
+            output = model_dis(fake.detach()).view(-1)
+            errD_fake = criterion(output, label)
+            D_G_z1 = output.mean().item()
+            errD = errD_real + errD_fake
+            # Update D
+            optimizer_d.step()
 
-            errD   = e_real + e_syn
-            
-            ######################
-            # Train generator
-            ######################
-            dg_syn      = model_dis(image_synt)
-            lg_real     = torch.ones(dg_syn.size(0), 1, 1, 1).to(device)
-            errG_g      = lossBCE(dg_syn, lg_real)
-
-            # Generator error
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            label.fill_(1)  # fake labels are real for generator cost
+            output = model_dis(fake).view(-1)
+            errG_g = criterion(output, label)
+            D_G_z2 = output.mean().item()
 
             # Pixel wise loss
-            errG_wise = 10*pixel_wise(fake, frontal)
+            errG_wise = pixel_wise(fake, frontal)
             errG = errG_g + errG_wise
 
             testG_loss += errG.item()
-            testD_loss += error_dis.item()
+            testD_loss += errD.item()
 
-            progress.set_description("Epoch: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
+            progress.set_description("Test: %d, G: %.3f D: %.3f  " % (epoch, errG.item(), errD.item()))
         if (epoch + 1) % print_epoch == 0:
             vutils.save_image(fake.data, path_result + '/synt_%03d.jpg' % epoch, normalize=True)
             vutils.save_image(image.data, path_result + '/input_%03d.jpg' % epoch, normalize=True)
