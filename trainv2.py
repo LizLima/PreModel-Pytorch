@@ -35,7 +35,7 @@ lr_d        = 0.0002
 num_epochs  = 500
 batch_size  = 32
 image_size  = 128
-print_epoch = 5
+print_epoch = 25
 
 ################################################
 # DATASET 
@@ -44,8 +44,8 @@ print_epoch = 5
 path_lfw        = "/home/liz/Documents/Data/lfw"
 path_cpf        = "/home/liz/Documents/Data/cfp-dataset/Data/"
 path_result     = "/media/liz/Files/Model-Pretrained/GAN_64batch"
-path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
-#path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
+# path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
+path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
 name_checkpoint = "vgg19_gan_checkpoint"                      
 # Create the dataloader CPF
 data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
@@ -92,7 +92,7 @@ pixel_wise  = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = False
+flag = True
 start_epoch = 0
 if flag:
   model_G, optimizer_G, start_epoch = utils.load_checkpoint(model_G, optimizer_G, path_pretrained)

@@ -39,10 +39,10 @@ def compare():
 
 def compare_gan():
       # Load pickle file
-    path = '/media/liz/Files/Model-Pretrained/GAN_64batch/'
+    path = '/media/liz/Files/Model-Pretrained/GAN_64batch'
     
     list_file = [
-        ("Test2", "Test4/files_gan_test.pckl")
+        ("Test2", "_Test3/files_gan_test_499.pckl")
         # ("vgg19-train-64","/PreTrained_VGG19bn_b64_lfw/files_vgg19_train.pckl"),
         # ("vgg19-test-64","/PreTrained_VGG19bn_b64_lfw/files_vgg19_test.pckl"),
         # ("resnet-train-128", "/results_resnet50_batch128_lfw/files_resnet50_b128_train.pckl"),
