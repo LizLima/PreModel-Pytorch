@@ -92,7 +92,7 @@ pixel_wise  = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = True
+flag = False
 start_epoch = 0
 if flag:
   model_G, optimizer_G, start_epoch = utils.load_checkpoint(model_G, optimizer_G, path_pretrained)
@@ -252,9 +252,10 @@ for e in range(num_epochs):
     loss_Train.append((trainG_loss, trainD_loss))
     loss_Test.append((testG_loss, testD_loss))
 
-fichero = open(path_result + '/files_gan_train.pckl', 'wb')
-pickle.dump(loss_Train, fichero)
-fichero.close()
-fichero = open(path_result + '/files_gan_test.pckl', 'wb')
-pickle.dump(loss_Test, fichero)
-fichero.close()
+    if (e + 1) % print_epoch == 0:
+        fichero = open(path_result + '/files_gan_train_' + str(e) + '.pckl', 'wb')
+        pickle.dump(loss_Train, fichero)
+        fichero.close()
+        fichero = open(path_result + '/files_gan_test_' + str(e) + '.pckl', 'wb')
+        pickle.dump(loss_Test, fichero)
+        fichero.close()

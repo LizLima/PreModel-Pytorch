@@ -4,7 +4,7 @@ File: trainv2.py
 
 Model
 ----------------------------
-Encoder : VGG (Pretrained= True | Pretrained face[VGGFace]: Yes )
+Encoder : Resnet50 (Pretrained= True | Pretrained face[VGGFace]: No )
           w/o Freeze layer
 Decoder: 
 

@@ -10,14 +10,14 @@ class Encoder(nn.Module):
 
         # Endoder
         # VGG
-        self.encoder =  models.vgg19_bn(pretrained=True)
-        self.n_infeatures = self.encoder.classifier._modules['6'].in_features
-        self.encoder.classifier._modules['6'] = nn.Linear(self.n_infeatures, self.dim)
+        # self.encoder =  models.vgg19_bn(pretrained=True)
+        # self.n_infeatures = self.encoder.classifier._modules['6'].in_features
+        # self.encoder.classifier._modules['6'] = nn.Linear(self.n_infeatures, self.dim)
        
         # RESNET50
-        # self.encoder =  models.resnet50(pretrained=True)
-        # num_ftrs = self.encoder.fc.in_features
-        # self.encoder.fc = nn.Linear(num_ftrs, self.dim)
+        self.encoder =  models.resnet50(pretrained=True)
+        num_ftrs = self.encoder.fc.in_features
+        self.encoder.fc = nn.Linear(num_ftrs, self.dim)
 
     def forward(self, input):
         out_space   = self.encoder(input)
