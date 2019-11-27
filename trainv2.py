@@ -92,7 +92,7 @@ loss_pix  = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = True
+flag = False
 start_epoch = 0
 if flag:
   model_G, optimizer_G, start_epoch = utils.load_checkpoint(model_G, optimizer_G, path_pretrained)
@@ -153,7 +153,7 @@ def train(epoch):
         err_pix = loss_pix(fake, frontal)
         # err_pix.backward(retain_graph=True)
 
-        errG = err_bce + 10*err_pix
+        errG = err_bce + err_pix
         errG.backward()
         optimizer_G.step()
         
@@ -225,7 +225,7 @@ def test(epoch):
             err_bce = criterion(output, label)
             err_pix = loss_pix(fake, frontal)
 
-            errG = err_bce + 10*err_pix
+            errG = err_bce + err_pix
             
             testG_loss += errG.item()
             testD_loss += errD.item()
