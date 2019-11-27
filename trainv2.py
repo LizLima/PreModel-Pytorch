@@ -31,7 +31,7 @@ device = torch.device('cuda')
 
 laten_sapce = 256
 lr          = 0.0002
-lr_d        = 0.0002
+lr_d        = 0.0001
 num_epochs  = 500
 batch_size  = 32
 image_size  = 128
@@ -87,7 +87,7 @@ optimizer_G = optim.Adam(model_G.parameters(), lr=lr)
 optimizer_D = optim.Adam(model_D.parameters(), lr=lr_d)
 
 criterion   = nn.BCELoss()
-pixel_wise  = nn.L1Loss(reduction='mean')
+loss_pix  = nn.L1Loss(reduction='mean')
 
 ################################################
 # CONFIGURATION MODEL 
@@ -147,9 +147,14 @@ def train(epoch):
         optimizer_G.zero_grad()
         label.fill_(1) 
         output = model_D(fake)
-        errG = criterion(output, label)
+        err_bce = criterion(output, label)
+        # err_bce.backward(retain_graph=True)
+
+        err_pix = loss_pix(fake, frontal)
+        # err_pix.backward(retain_graph=True)
+
+        errG = err_bce + 10*err_pix
         errG.backward()
-      
         optimizer_G.step()
         
         trainG_loss += errG.item()
@@ -217,7 +222,10 @@ def test(epoch):
             # GENERATOR
             label.fill_(1)  # fake labels are real for generator cost
             output = model_D(fake)
-            errG   = criterion(output, label)
+            err_bce = criterion(output, label)
+            err_pix = loss_pix(fake, frontal)
+
+            errG = err_bce + 10*err_pix
             
             testG_loss += errG.item()
             testD_loss += errD.item()
