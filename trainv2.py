@@ -153,7 +153,7 @@ def train(epoch):
         err_pix = loss_pix(fake, frontal)
         # err_pix.backward(retain_graph=True)
 
-        errG = err_bce + 10*err_pix
+        errG = err_bce + err_pix
         errG.backward()
         optimizer_G.step()
         
