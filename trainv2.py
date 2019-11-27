@@ -44,8 +44,8 @@ print_epoch = 25
 path_lfw        = "/home/liz/Documents/Data/lfw"
 path_cpf        = "/home/liz/Documents/Data/cfp-dataset/Data/"
 path_result     = "/media/liz/Files/Model-Pretrained/GAN_64batch"
-# path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
-path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
+path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
+# path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
 name_checkpoint = "vgg19_gan_checkpoint"                      
 # Create the dataloader CPF
 data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
@@ -92,7 +92,7 @@ loss_pix  = nn.L1Loss(reduction='mean')
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = False
+flag = True
 start_epoch = 0
 if flag:
   model_G, optimizer_G, start_epoch = utils.load_checkpoint(model_G, optimizer_G, path_pretrained)
@@ -153,7 +153,7 @@ def train(epoch):
         err_pix = loss_pix(fake, frontal)
         # err_pix.backward(retain_graph=True)
 
-        errG = err_bce + err_pix
+        errG = err_bce + 10*err_pix
         errG.backward()
         optimizer_G.step()
         
@@ -217,7 +217,7 @@ def test(epoch):
             output      = model_D(fake.detach())
             errD_fake   = criterion(output, label)
            
-            errD = errD_real + errD_fake
+            errD = errD_real + 10*errD_fake
             
             # GENERATOR
             label.fill_(1)  # fake labels are real for generator cost
