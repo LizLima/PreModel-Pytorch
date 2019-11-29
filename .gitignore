@@ -1,4 +1,3 @@
 .vscode
 __pycache__
-pre-trained.py
 *.pth.tar

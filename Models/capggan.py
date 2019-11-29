@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import utils.residual as residual
 import utils.maxout as maxout
-import pickle
 
 class Encoder(nn.Module):
     # pass
