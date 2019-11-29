@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from PIL import Image 
 from random import shuffle
-import Datasets.FaceLadmark.landmark as Landmark
+import Datasets.landmark as Landmark
 import cv2 as cv2
 import numpy as np
 from math import exp
@@ -14,10 +14,8 @@ import matplotlib.pyplot as plt
 
 class DataSetTrain(Dataset):
 
-    def __init__(self, data_root,isPatch="None", factor=0):
+    def __init__(self, data_root,isPatch=False, factor=0):
         # super(self).__init__()
-        self.data_root = data_root 
-        self.classes = []
         self.isPatch = isPatch
         self.imgs = []
         self.totensor=transforms.Compose([
@@ -46,16 +44,20 @@ class DataSetTrain(Dataset):
                             # transforms.Normalize([0.5], [0.5]),
                         ])
         self.scaledGaussian = lambda x : exp(-(1/8)*(x**2))
-        
-        self.__classes__()
-
+        # Return Patch
         self.get_patch = Landmark.Landmark(factor)
-        for register in os.listdir(self.data_root + "Images/"):
+        for register in os.listdir(data_root):
             # print(register)
-            register_folder = os.path.join(self.data_root + "Images/", register)
+            register_folder = os.path.join(data_root, register)
 
             # Get frontal image
             frontal_file = os.path.join(register_folder, 'frontal')
+            # name_frontals = []
+            # for pfile in os.listdir(frontal_file):
+            #     path_frontal = os.path.join(frontal_file, pfile)
+            #     name_frontals.append(path_frontal)
+
+            ## Get profile image an to asociate it with frontal images
             profile_file = os.path.join(register_folder, 'profile')
             
             for pfile in os.listdir(profile_file):
@@ -66,19 +68,8 @@ class DataSetTrain(Dataset):
                 file_frontal = frontal_file + "/01.jpg"
                 self.imgs.append((register, file_profile, file_frontal))
 
-
     def __len__(self):
         return len(self.imgs)
-
-    def __classes__(self):
-
-        # Load txt
-        with open(self.data_root + "list_name.txt", 'r') as fp:
-            # line = fp.readline()
-            line = fp.readline() # not first line
-            while line:
-                self.classes.append(line.strip())
-                line = fp.readline()
 
     def __getitem__(self, index):
         item = {}
@@ -97,14 +88,10 @@ class DataSetTrain(Dataset):
         item["frontal32"] = self.tobasictensor(data_frontal.resize((32,32), Image.ANTIALIAS))
         item["frontal64"] = self.tobasictensor(data_frontal.resize((64,64), Image.ANTIALIAS))
 
-        # Change for switch patch/only point as capgan/ all points 
-        
-        if self.isPatch == "patch":
+        if self.isPatch:
            
-            # cv_profile = cv2.cvtColor(np.array(data_profile), cv2.COLOR_RGB2BGR)
-            # cv_frontal = cv2.cvtColor(np.array(data_frontal), cv2.COLOR_RGB2BGR)
-            cv_frontal = (item["frontal"].permute(1,2,0).numpy()*255).astype(np.uint8)
-            cv_profile = (item["profile"].permute(1,2,0).numpy()*255).astype(np.uint8)
+            cv_profile = cv2.cvtColor(np.array(data_profile), cv2.COLOR_RGB2BGR)
+            cv_frontal = cv2.cvtColor(np.array(data_frontal), cv2.COLOR_RGB2BGR)
             leye_profile, reye_profile, nose_profile, mouth_profile = self.get_patch.getPatches(cv_profile)
             leye_frontal, reye_frontal, nose_frontal, mouth_frontal = self.get_patch.getPatches(cv_frontal)
             #a = torch.from_numpy(leye_frontal.transpose(2, 1 , 0))
@@ -122,17 +109,7 @@ class DataSetTrain(Dataset):
             item["nose_f"] = self.toTensorNose(Image.fromarray(nose_frontal))
             item["mouth_f"] = self.toTensorMouth(Image.fromarray(mouth_frontal))
         
-        if self.isPatch == "all-frontal":
-            width = 128
-            height = 128
-            # Convert array to opencv
-            cv_frontal = (item["frontal"].permute(1,2,0).numpy()*255).astype(np.uint8)
-           
-            # Get 5 coord lefteye, right eye, nose, left mouth , right mouth
-            listCoord = self.get_patch.getAllPointFace(cv_frontal)
-            item["frontal"] = self.create_heap(listCoord, width, height)
-
-        if self.isPatch == "heap-map":
+        else:
             width = 128
             height = 128
             # Convert array to opencv
@@ -173,9 +150,9 @@ class DataSetTrain(Dataset):
             heap = torch.zeros(5, 128, 128)
         return heap
 
-# # Example
+# Example
 # import torch
-# data = DataSetTrain('/home/liz/Documents/Data/cfp-dataset/Data/Images/', isPatch="all-frontal")
+# data = DatasetTrain('/home/liz/Documents/Data/cfp-dataset/Data/Images/')
 
 # dataloader = torch.utils.data.DataLoader( data, shuffle=True, batch_size=20)
 # print(len(data))
@@ -188,4 +165,3 @@ class DataSetTrain(Dataset):
 
 # print(f.shape)
 # print(p.shape)
-

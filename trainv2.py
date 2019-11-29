@@ -9,6 +9,7 @@ import utils as utils
 import Models.modelv2 as modelGen
 import Models.discriminator as modelDis
 import Datasets.dataCPF as datacpfs
+import Models.loss as Loss
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,9 @@ import pickle
 from tqdm.autonotebook import tqdm
 import os
 from torchvision import datasets, transforms
+
+# Load Classification
+import LightCNN.lightcnn as LightCNN
 
 device = torch.device('cuda')
 
@@ -35,8 +39,11 @@ lr_d        = 0.0001
 num_epochs  = 500
 batch_size  = 32
 image_size  = 128
-print_epoch = 25
+print_epoch = 5
 
+lambda_1     = 1 # BCE
+lambda_2     = 10 # Pixel wise loss
+lambda_3     = 10 # identity preserving
 ################################################
 # DATASET 
 ################################################
@@ -46,7 +53,9 @@ path_cpf        = "/home/liz/Documents/Data/cfp-dataset/Data/"
 path_result     = "/media/liz/Files/Model-Pretrained/GAN_64batch"
 path_pretrained = "/media/liz/Files/Model-Pretrained/PreTrained_VGG19bn_b64_lfw/vgg19_checkpoint199.pth.tar"
 # path_pretrained = '/media/liz/Files/Model-Pretrained/resnet50_b128_vggface/resnet_checkpoint3_.pth.tar'
-name_checkpoint = "vgg19_gan_checkpoint"                      
+name_checkpoint = "vgg19_gan_checkpoint"      
+path_light      = "/home/liz/Documents/PreModel-Pytorch/LightCNN/LightCNN_29Layers_checkpoint.pth.tar"
+
 # Create the dataloader CPF
 data = datacpfs.DataSetTrain(path_cpf, isPatch="none", factor=0)
 
@@ -66,8 +75,6 @@ train_dataset, test_dataset = torch.utils.data.random_split(data, [train_size, t
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-# Plot some training images
-
 
 ################################################
 # MODEL 
@@ -83,16 +90,26 @@ model_G       = modelGen.Generator(num_classes).to(device)
 model_D       = modelDis.Discriminator().to(device)
 model_D.apply(utils.weights_init)
 
+# features
+model_light = LightCNN.LightCNN_29Layers(num_classes=num_classes)
+model_light.to(device)
+checkpoint = torch.load(path_light)
+model_light.load_state_dict(checkpoint['state_dict'], strict=False)
+model_light.eval()
+
+# Optimizer
 optimizer_G = optim.Adam(model_G.parameters(), lr=lr)
 optimizer_D = optim.Adam(model_D.parameters(), lr=lr_d)
 
+# Loss Functions
 criterion   = nn.BCELoss()
 loss_pix  = nn.L1Loss(reduction='mean')
+Loss       = Loss.Loss()
 
 ################################################
 # CONFIGURATION MODEL 
 ################################################
-flag = True
+flag = False
 start_epoch = 0
 if flag:
   model_G, optimizer_G, start_epoch = utils.load_checkpoint(model_G, optimizer_G, path_pretrained)
@@ -134,7 +151,7 @@ def train(epoch):
         ## Train with fake image
         fake = model_G(image)
         label.fill_(0)
-        output = model_D(fake.detach())
+        output    = model_D(fake.detach())
         errD_fake = criterion(output, label)
         errD_fake.backward()
         
@@ -147,13 +164,24 @@ def train(epoch):
         optimizer_G.zero_grad()
         label.fill_(1) 
         output = model_D(fake)
+
+        # Min G
         err_bce = criterion(output, label)
         # err_bce.backward(retain_graph=True)
 
+        # Pixel wise
         err_pix = loss_pix(fake, frontal)
         # err_pix.backward(retain_graph=True)
 
-        errG = err_bce + 10*err_pix
+        # Identity preserving
+        # Model fc2, fc1, pool4, layer5, layer4
+        f_frl, f2_frl, p_frl, l5_frl, l4_frl = model_light(frontal)
+        f_fak, f2_fak, p_fak, l5_fak, l4_fak = model_light(fake)
+        err_ip5 = Loss.IdentityPreserving(l5_frl, l5_fak)
+        err_ip4 = Loss.IdentityPreserving(l4_frl, l4_fak)
+        err_ip  = err_ip4 + err_ip5
+
+        errG = lambda_1*err_bce + lambda_2*err_pix + lambda_3*err_ip
         errG.backward()
         optimizer_G.step()
         
@@ -225,7 +253,15 @@ def test(epoch):
             err_bce = criterion(output, label)
             err_pix = loss_pix(fake, frontal)
 
-            errG = err_bce + 10*err_pix
+            # Identity preserving
+            f_frl, f2_frl, p_frl, l5_frl, l4_frl = model_light(frontal)
+            f_fak, f2_fak, p_fak, l5_fak, l4_fak = model_light(fake)
+            err_ip5 = Loss.IdentityPreserving(l5_frl, l5_fak)
+            err_ip4 = Loss.IdentityPreserving(l4_frl, l4_fak)
+            err_ip  = err_ip4 + err_ip5
+
+            errG = lambda_1*err_bce + lambda_2*err_pix + lambda_3*err_ip
+
             
             testG_loss += errG.item()
             testD_loss += errD.item()
