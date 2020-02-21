@@ -15,7 +15,7 @@ import numpy as np
 import torchvision.utils as vutils
 
 # Model
-import Datasets.dataCFP as datasets
+import Datasets.dataCPF as datasets
 import utils.utils as utils
 from tqdm.autonotebook import tqdm
 
@@ -33,14 +33,14 @@ lr      = 0.0002
 
 num_epochs  = 100
 batch_size  = 8
-print_epoch = 1
+print_epoch = 5
 
 
 ################################################
 # DATASET 
 ################################################
-path = '/home/liz/Documents/Data/cfp-dataset/Data/Images'
-path_result= '/media/liz/Files/TestTPGan'
+path = '/home/invitado/Documents/Liz/data/cfp-dataset/Data/'
+path_result= '/home/invitado/Documents/Liz/test_capggan'
 # Create the dataset
 dataset = datasets.DataSetTrain(path, isPatch="heap-map", factor=0)
 
@@ -59,7 +59,7 @@ real_batch = next(iter(trainloader))
 ################################################
 # MODEL 
 ################################################
-device = torch.device('cpu')
+device = torch.device('cuda')
 model_gen = model_cap.Generator().to(device)
 model_dii = model_cap.Discriminator(6).to(device)
 model_dpe = model_cap.Discriminator(8).to(device)

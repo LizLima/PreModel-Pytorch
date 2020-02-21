@@ -69,7 +69,7 @@ class Decoder(nn.Module):
     # pass
     def __init__(self):
         super().__init__()
-   
+        self.bias = False
         # DECODER
         self.fc2 = nn.Linear(in_features=256, out_features=4096)
         self.bnfc2 = nn.BatchNorm1d(num_features=4096)
@@ -119,7 +119,8 @@ class Decoder(nn.Module):
         self.bn9 = nn.BatchNorm2d(3)
 
         self.tanh = nn.Tanh()
-
+        self.relu = nn.ReLU()
+        
     def forward(self, ls_vector, r_conv4, r_conv3, r_conv2, r_conv1, r_conv0, ia_32, ia_64, ia):
 
        
@@ -216,257 +217,257 @@ class Discriminator(nn.Module):
         return conv5
 
 
-########################################################################
-## TRAIN
-########################################################################
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import matplotlib.pyplot as plt
-import torch.nn.functional as F
-import numpy as np
-import torchvision.utils as vutils
+# ########################################################################
+# ## TRAIN
+# ########################################################################
+# import torch
+# import torch.nn as nn
+# import torch.optim as optim
+# import matplotlib.pyplot as plt
+# import torch.nn.functional as F
+# import numpy as np
+# import torchvision.utils as vutils
 
-# Model
-import Datasets.dataCFP as datasets
-import utils.utils as utils
-from tqdm.autonotebook import tqdm
-
-
-################################################
-# CONFIG 
-################################################
-lambda1 = 10
-lambda2 = 0.1
-lambda3 = 0.1
-lambda4 = 0.02
-lambda5 = 0.0001
-lr      = 0.0002
+# # Model
+# import Datasets.dataCFP as datasets
+# import utils.utils as utils
+# from tqdm.autonotebook import tqdm
 
 
-num_epochs  = 100
-batch_size  = 8
-print_epoch = 1
+# ################################################
+# # CONFIG 
+# ################################################
+# lambda1 = 10
+# lambda2 = 0.1
+# lambda3 = 0.1
+# lambda4 = 0.02
+# lambda5 = 0.0001
+# lr      = 0.0002
 
 
-################################################
-# DATASET 
-################################################
-path = '/home/liz/Documents/Data/cfp-dataset/Data/Images'
-path_result= '/media/liz/Files/TestTPGan'
-# Create the dataset
-dataset = datasets.DataSetTrain(path, isPatch=False, factor=0)
-
-train_size = int(0.7 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-
-trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-testloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-print(len(trainloader))
-print(len(testloader))
-# Plot some training images
-real_batch = next(iter(trainloader))
+# num_epochs  = 100
+# batch_size  = 8
+# print_epoch = 1
 
 
-################################################
-# MODEL 
-################################################
-device = torch.device('cpu')
-model_gen = Generator().to(device)
-model_dii = Discriminator(6).to(device)
-model_dpe = Discriminator(8).to(device)
+# ################################################
+# # DATASET 
+# ################################################
+# path = '/home/liz/Documents/Data/cfp-dataset/Data/Images'
+# path_result= '/media/liz/Files/TestTPGan'
+# # Create the dataset
+# dataset = datasets.DataSetTrain(path, isPatch=False, factor=0)
 
-################################################
-# COST FUNCTIONS 
-################################################
-loss_pixel = nn.L1Loss(reduction='sum')
-loss_adv = nn.BCELoss()
+# train_size = int(0.7 * len(dataset))
+# test_size = len(dataset) - train_size
+# train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-params = list(model_gen.parameters()) + list(model_dii.parameters()) +\
-         list(model_dpe.parameters())
+# trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+# testloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+# print(len(trainloader))
+# print(len(testloader))
+# # Plot some training images
+# real_batch = next(iter(trainloader))
 
-optimizer = torch.optim.Adam(params, lr=lr)
-###
-# epoch = 11
-# state = {'epoch': epoch + 1, 'state_dict': model_gen.state_dict(),
-# 'optimizer': optimizer.state_dict()}
-# torch.save(state, path_result + "/model/checkpoint_gen" + str(epoch) + ".pth.tar" )
 
-# state = {'epoch': epoch + 1, 'state_dict': model_dii.state_dict(),
-# 'optimizer': optimizer.state_dict()}
-# torch.save(state, path_result + "/model/checkpoint_dii" + str(epoch) + ".pth.tar" )
+# ################################################
+# # MODEL 
+# ################################################
+# device = torch.device('cpu')
+# model_gen = Generator().to(device)
+# model_dii = Discriminator(6).to(device)
+# model_dpe = Discriminator(8).to(device)
 
-# state = {'epoch': epoch + 1, 'state_dict': model_dpe.state_dict(),
-# 'optimizer': optimizer.state_dict()}
-# torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
-###
-def train(epoch):
-    model_gen.train()
-    model_dii.train()
-    model_dpe.train()
-    value_loss  = 0
+# ################################################
+# # COST FUNCTIONS 
+# ################################################
+# loss_pixel = nn.L1Loss(reduction='sum')
+# loss_adv = nn.BCELoss()
 
-    progress = tqdm(enumerate(trainloader), desc="Train", total=len(trainloader))
-    for i,x in progress:
-        optimizer.zero_grad()
+# params = list(model_gen.parameters()) + list(model_dii.parameters()) +\
+#          list(model_dpe.parameters())
 
-        source = x['profile'].to(device)
-        source32 = x['profile32'].to(device)
-        source64 = x['profile64'].to(device)
-        target = x['frontal'].to(device)
-        target32 = x["frontal32"].to(device)
-        target64 = x["frontal64"].to(device)
-        # Generate heap map
-        pa_profile = x["hm_p"].to(device)
-        pb_target = x["hm_f"].to(device)
-        img128, img64, img32 = model_gen(source, pa_profile, pb_target, source64, source32)
+# optimizer = torch.optim.Adam(params, lr=lr)
+# ###
+# # epoch = 11
+# # state = {'epoch': epoch + 1, 'state_dict': model_gen.state_dict(),
+# # 'optimizer': optimizer.state_dict()}
+# # torch.save(state, path_result + "/model/checkpoint_gen" + str(epoch) + ".pth.tar" )
+
+# # state = {'epoch': epoch + 1, 'state_dict': model_dii.state_dict(),
+# # 'optimizer': optimizer.state_dict()}
+# # torch.save(state, path_result + "/model/checkpoint_dii" + str(epoch) + ".pth.tar" )
+
+# # state = {'epoch': epoch + 1, 'state_dict': model_dpe.state_dict(),
+# # 'optimizer': optimizer.state_dict()}
+# # torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
+# ###
+# def train(epoch):
+#     model_gen.train()
+#     model_dii.train()
+#     model_dpe.train()
+#     value_loss  = 0
+
+#     progress = tqdm(enumerate(trainloader), desc="Train", total=len(trainloader))
+#     for i,x in progress:
+#         optimizer.zero_grad()
+
+#         source = x['profile'].to(device)
+#         source32 = x['profile32'].to(device)
+#         source64 = x['profile64'].to(device)
+#         target = x['frontal'].to(device)
+#         target32 = x["frontal32"].to(device)
+#         target64 = x["frontal64"].to(device)
+#         # Generate heap map
+#         pa_profile = x["hm_p"].to(device)
+#         pb_target = x["hm_f"].to(device)
+#         img128, img64, img32 = model_gen(source, pa_profile, pb_target, source64, source32)
         
-        Lpix_128 = loss_pixel(img128, target) # 128*128*3 -> 0.000020345
-        Lpix_64 = loss_pixel(img64, target64) # 64*64*3 -> 0,00008138
-        Lpix_32 = loss_pixel(img32, target32) # 32*32*3 -> 0,000325521
+#         Lpix_128 = loss_pixel(img128, target) # 128*128*3 -> 0.000020345
+#         Lpix_64 = loss_pixel(img64, target64) # 64*64*3 -> 0,00008138
+#         Lpix_32 = loss_pixel(img32, target32) # 32*32*3 -> 0,000325521
 
-        Lpix = (Lpix_128*0.00002 + Lpix_64*0.00008 + Lpix_32*0.00032)/3
+#         Lpix = (Lpix_128*0.00002 + Lpix_64*0.00008 + Lpix_32*0.00032)/3
 
-        # Disc II
-        output_t = model_dii(target, source)
-        output_s = model_dii(img128, source)
-        label_real = torch.ones(output_t.size()).to(device)
-        label_fake = torch.zeros(output_s.size()).to(device)
+#         # Disc II
+#         output_t = model_dii(target, source)
+#         output_s = model_dii(img128, source)
+#         label_real = torch.ones(output_t.size()).to(device)
+#         label_fake = torch.zeros(output_s.size()).to(device)
 
-        Lii_real = loss_adv(output_t, label_real)
-        Lii_fake = loss_adv(output_s, label_fake)
+#         Lii_real = loss_adv(output_t, label_real)
+#         Lii_fake = loss_adv(output_s, label_fake)
 
-        Lii = Lii_real + Lii_fake
+#         Lii = Lii_real + Lii_fake
 
-        # Disc PE
-        output_pt = model_dpe(target, pb_target)
-        output_ps = model_dpe(img128, pb_target)
-        label_real = torch.ones(output_t.size()).to(device)
-        label_fake = torch.zeros(output_s.size()).to(device)
+#         # Disc PE
+#         output_pt = model_dpe(target, pb_target)
+#         output_ps = model_dpe(img128, pb_target)
+#         label_real = torch.ones(output_t.size()).to(device)
+#         label_fake = torch.zeros(output_s.size()).to(device)
 
-        Lpe_real = loss_adv(output_pt, label_real)
-        Lpe_fake = loss_adv(output_ps, label_fake)
+#         Lpe_real = loss_adv(output_pt, label_real)
+#         Lpe_fake = loss_adv(output_ps, label_fake)
 
-        Lpe = Lpe_real + Lpe_fake
+#         Lpe = Lpe_real + Lpe_fake
 
-        L = lambda1*Lpix + lambda2*Lii + lambda3*Lpe
-        L.backward()
-        optimizer.step()
+#         L = lambda1*Lpix + lambda2*Lii + lambda3*Lpe
+#         L.backward()
+#         optimizer.step()
 
-        value_loss += L.item()
+#         value_loss += L.item()
 
-        progress.set_description("Epoch: %d, Loss: %.3f " % (epoch, L.item()))
+#         progress.set_description("Epoch: %d, Loss: %.3f " % (epoch, L.item()))
 
-    if (epoch + 1) % print_epoch == 0:
-        state = {'epoch': epoch + 1, 'state_dict': model_gen.state_dict(),
-        'optimizer': optimizer.state_dict()}
-        torch.save(state, path_result + "/model/checkpoint_gen" + str(epoch) + ".pth.tar" )
+#     if (epoch + 1) % print_epoch == 0:
+#         state = {'epoch': epoch + 1, 'state_dict': model_gen.state_dict(),
+#         'optimizer': optimizer.state_dict()}
+#         torch.save(state, path_result + "/model/checkpoint_gen" + str(epoch) + ".pth.tar" )
 
-        state = {'epoch': epoch + 1, 'state_dict': model_dii.state_dict(),
-        'optimizer': optimizer.state_dict()}
-        torch.save(state, path_result + "/model/checkpoint_dii" + str(epoch) + ".pth.tar" )
+#         state = {'epoch': epoch + 1, 'state_dict': model_dii.state_dict(),
+#         'optimizer': optimizer.state_dict()}
+#         torch.save(state, path_result + "/model/checkpoint_dii" + str(epoch) + ".pth.tar" )
 
-        state = {'epoch': epoch + 1, 'state_dict': model_dpe.state_dict(),
-        'optimizer': optimizer.state_dict()}
-        torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
+#         state = {'epoch': epoch + 1, 'state_dict': model_dpe.state_dict(),
+#         'optimizer': optimizer.state_dict()}
+#         torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
         
-    return value_loss
+#     return value_loss
 
-def test(epoch):
+# def test(epoch):
 
-    model_gen.eval()
-    model_dii.eval()
-    model_dpe.eval()
-    value_loss  = 0
+#     model_gen.eval()
+#     model_dii.eval()
+#     model_dpe.eval()
+#     value_loss  = 0
     
-    progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
+#     progress = tqdm(enumerate(testloader), desc="Train", total=len(testloader))
 
-    for i, x in progress:
-        source = x['profile'].to(device)
-        source32 = x['profile32'].to(device)
-        source64 = x['profile64'].to(device)
-        target = x['frontal'].to(device)
-        target32 = x["frontal32"].to(device)
-        target64 = x["frontal64"].to(device)
-        # Generate heap map
-        pa_profile = x["hm_p"].to(device)
-        pb_target = x["hm_f"].to(device)
-        img128, img64, img32 = model_gen(source, pa_profile, pb_target, source64, source32)
+#     for i, x in progress:
+#         source = x['profile'].to(device)
+#         source32 = x['profile32'].to(device)
+#         source64 = x['profile64'].to(device)
+#         target = x['frontal'].to(device)
+#         target32 = x["frontal32"].to(device)
+#         target64 = x["frontal64"].to(device)
+#         # Generate heap map
+#         pa_profile = x["hm_p"].to(device)
+#         pb_target = x["hm_f"].to(device)
+#         img128, img64, img32 = model_gen(source, pa_profile, pb_target, source64, source32)
         
-        Lpix_128 = loss_pixel(img128, target) # 128*128*3 -> 0.000020345
-        Lpix_64 = loss_pixel(img64, target64) # 64*64*3 -> 0,00008138
-        Lpix_32 = loss_pixel(img32, target32) # 32*32*3 -> 0,000325521
+#         Lpix_128 = loss_pixel(img128, target) # 128*128*3 -> 0.000020345
+#         Lpix_64 = loss_pixel(img64, target64) # 64*64*3 -> 0,00008138
+#         Lpix_32 = loss_pixel(img32, target32) # 32*32*3 -> 0,000325521
 
-        Lpix = (Lpix_128*0.00002 + Lpix_64*0.00008 + Lpix_32*0.00032)/3
+#         Lpix = (Lpix_128*0.00002 + Lpix_64*0.00008 + Lpix_32*0.00032)/3
 
-        # Disc II
-        output_t = model_dii(target, source)
-        output_s = model_dii(img128, source)
-        label_real = torch.ones(output_t.size()).to(device)
-        label_fake = torch.zeros(output_s.size()).to(device)
+#         # Disc II
+#         output_t = model_dii(target, source)
+#         output_s = model_dii(img128, source)
+#         label_real = torch.ones(output_t.size()).to(device)
+#         label_fake = torch.zeros(output_s.size()).to(device)
 
-        Lii_real = loss_adv(output_t, label_real)
-        Lii_fake = loss_adv(output_s, label_fake)
+#         Lii_real = loss_adv(output_t, label_real)
+#         Lii_fake = loss_adv(output_s, label_fake)
 
-        Lii = Lii_real + Lii_fake
+#         Lii = Lii_real + Lii_fake
 
-        # Disc PE
-        output_pt = model_dpe(target, pb_target)
-        output_ps = model_dpe(img128, pb_target)
-        label_real = torch.ones(output_t.size()).to(device)
-        label_fake = torch.zeros(output_s.size()).to(device)
+#         # Disc PE
+#         output_pt = model_dpe(target, pb_target)
+#         output_ps = model_dpe(img128, pb_target)
+#         label_real = torch.ones(output_t.size()).to(device)
+#         label_fake = torch.zeros(output_s.size()).to(device)
 
-        Lpe_real = loss_adv(output_pt, label_real)
-        Lpe_fake = loss_adv(output_ps, label_fake)
+#         Lpe_real = loss_adv(output_pt, label_real)
+#         Lpe_fake = loss_adv(output_ps, label_fake)
 
-        Lpe = Lpe_real + Lpe_fake
+#         Lpe = Lpe_real + Lpe_fake
 
-        L = lambda1*Lpix + lambda2*Lii + lambda3*Lpe
+#         L = lambda1*Lpix + lambda2*Lii + lambda3*Lpe
        
-        value_loss += L.item()
+#         value_loss += L.item()
 
-        progress.set_description("Test: %d, Loss: %.3f  " % (epoch, L.item()))
+#         progress.set_description("Test: %d, Loss: %.3f  " % (epoch, L.item()))
 
-    if (epoch + 1) % print_epoch == 0:
+#     if (epoch + 1) % print_epoch == 0:
 
-        vutils.save_image(source.data, path_result + '/test/input_%03d.jpg' % epoch, normalize=True)
-        vutils.save_image(target.data, path_result + '/test/frontal_%03d.jpg' % epoch, normalize=True)
-        vutils.save_image(img128.data, path_result + '/test/gen_%03d.jpg' % epoch, normalize=True)
+#         vutils.save_image(source.data, path_result + '/test/input_%03d.jpg' % epoch, normalize=True)
+#         vutils.save_image(target.data, path_result + '/test/frontal_%03d.jpg' % epoch, normalize=True)
+#         vutils.save_image(img128.data, path_result + '/test/gen_%03d.jpg' % epoch, normalize=True)
         
-    return value_loss
+#     return value_loss
 
-Loss_train = []
-Loss_test = []
-for e in range(num_epochs):
-    train_loss = train(e)
-    print("Train : " + str(e) + "Loss: " + str(train_loss/len(trainloader)))
-    test_loss = test(e)
-    print("Test : " + str(e) + "Loss: " + str(test_loss/len(testloader)))
+# Loss_train = []
+# Loss_test = []
+# for e in range(num_epochs):
+#     train_loss = train(e)
+#     print("Train : " + str(e) + "Loss: " + str(train_loss/len(trainloader)))
+#     test_loss = test(e)
+#     print("Test : " + str(e) + "Loss: " + str(test_loss/len(testloader)))
 
-    Loss_train.append(train_loss/len(trainloader))
-    Loss_test.append(test_loss/len(testloader))
+#     Loss_train.append(train_loss/len(trainloader))
+#     Loss_test.append(test_loss/len(testloader))
     
-    if(e + 1) % print_epoch == 0:
-        x = np.arange(e + 1)
-        fig = plt.figure()
-        ax = plt.subplot(111)
-        ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
-        ax.plot(x, Loss_test, 'pink', label='Generator Test')
+#     if(e + 1) % print_epoch == 0:
+#         x = np.arange(e + 1)
+#         fig = plt.figure()
+#         ax = plt.subplot(111)
+#         ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
+#         ax.plot(x, Loss_test, 'pink', label='Generator Test')
 
-        # ax.plot(x, Loss_Disc, 'steelblue', label='Discriminator Training')
-        # ax.plot(x, Loss_Disc_Test, 'lightskyblue', label='Discriminator Test')
+#         # ax.plot(x, Loss_Disc, 'steelblue', label='Discriminator Training')
+#         # ax.plot(x, Loss_Disc_Test, 'lightskyblue', label='Discriminator Test')
 
-        plt.title('Function loss')
-        ax.legend()
-        fig.savefig(path_result + '/plot' + str(e) + '.png')
-        # plt.show()
-        plt.close(fig)
+#         plt.title('Function loss')
+#         ax.legend()
+#         fig.savefig(path_result + '/plot' + str(e) + '.png')
+#         # plt.show()
+#         plt.close(fig)
 
-        # Save results loss
-        fichero = open(path_result + '/files_gan_train_' + str(e) + '.pckl', 'wb')
-        pickle.dump(Loss_train, fichero)
-        fichero.close()
-        fichero = open(path_result + '/files_gan_test_' + str(e) + '.pckl', 'wb')
-        pickle.dump(Loss_test, fichero)
-        fichero.close()
+#         # Save results loss
+#         fichero = open(path_result + '/files_gan_train_' + str(e) + '.pckl', 'wb')
+#         pickle.dump(Loss_train, fichero)
+#         fichero.close()
+#         fichero = open(path_result + '/files_gan_test_' + str(e) + '.pckl', 'wb')
+#         pickle.dump(Loss_test, fichero)
+#         fichero.close()
