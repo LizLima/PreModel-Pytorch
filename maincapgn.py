@@ -34,7 +34,7 @@ lr      = 0.0002
 num_epochs  = 100
 batch_size  = 8
 print_epoch = 5
-
+load_checkpoint = True
 
 ################################################
 # DATASET 
@@ -225,7 +225,30 @@ def test(epoch):
 
 Loss_train = []
 Loss_test = []
-for e in range(num_epochs):
+
+start_epochs = 0
+# TODO
+def load_model(path, model, optimizer):
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    last_epoch = checkpoint['epoch']
+    
+    return model, optimizer, last_epoch
+
+
+if(load_checkpoint == True):
+
+    path_chck = path_result + "/model/checkpoint_"
+    epoch = 0
+    model_gen, optimizer, last_epoch = load_model(path_chck + "gen" + str(epoch) + ".pth.tar",model_gen, optimizer)
+    model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(epoch) + ".pth.tar",model_gen, optimizer)
+    model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(epoch) + ".pth.tar",model_gen, optimizer)
+    
+    start_epochs = epoch
+
+
+for e in range(start_epochs, num_epochs):
     train_loss = train(e)
     print("Train : " + str(e) + "Loss: " + str(train_loss/len(trainloader)))
     test_loss = test(e)
