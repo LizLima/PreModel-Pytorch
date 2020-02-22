@@ -231,7 +231,7 @@ start_epochs = 0
 def load_model(path, model, optimizer):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
     last_epoch = checkpoint['epoch']
     
     return model, optimizer, last_epoch
@@ -240,12 +240,12 @@ def load_model(path, model, optimizer):
 if(load_checkpoint == True):
 
     path_chck = path_result + "/model/checkpoint_"
-    epoch = 0
+    epoch = 9
     model_gen, optimizer, last_epoch = load_model(path_chck + "gen" + str(epoch) + ".pth.tar",model_gen, optimizer)
-    model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(epoch) + ".pth.tar",model_gen, optimizer)
-    model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(epoch) + ".pth.tar",model_gen, optimizer)
+    model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(epoch) + ".pth.tar",model_dii, optimizer)
+    model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(epoch) + ".pth.tar",model_dpe, optimizer)
     
-    start_epochs = epoch
+    start_epochs = last_epoch
 
 
 for e in range(start_epochs, num_epochs):
