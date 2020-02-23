@@ -240,7 +240,7 @@ def load_model(path, model, optimizer):
 if(load_checkpoint == True):
 
     path_chck = path_result + "/model/checkpoint_"
-    epoch = 9
+    epoch = 14
     model_gen, optimizer, last_epoch = load_model(path_chck + "gen" + str(epoch) + ".pth.tar",model_gen, optimizer)
     model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(epoch) + ".pth.tar",model_dii, optimizer)
     model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(epoch) + ".pth.tar",model_dpe, optimizer)
@@ -258,20 +258,20 @@ for e in range(start_epochs, num_epochs):
     Loss_test.append(test_loss/len(testloader))
     
     if(e + 1) % print_epoch == 0:
-        x = np.arange(e + 1)
-        fig = plt.figure()
-        ax = plt.subplot(111)
-        ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
-        ax.plot(x, Loss_test, 'pink', label='Generator Test')
+      #  x = np.arange(e + 1)
+       # fig = plt.figure()
+       # ax = plt.subplot(111)
+      #  ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
+      #  ax.plot(x, Loss_test, 'pink', label='Generator Test')
 
         # ax.plot(x, Loss_Disc, 'steelblue', label='Discriminator Training')
         # ax.plot(x, Loss_Disc_Test, 'lightskyblue', label='Discriminator Test')
 
-        plt.title('Function loss')
-        ax.legend()
-        fig.savefig(path_result + '/plot' + str(e) + '.png')
+      #  plt.title('Function loss')
+      #  ax.legend()
+      #  fig.savefig(path_result + '/plot' + str(e) + '.png')
         # plt.show()
-        plt.close(fig)
+       # plt.close(fig)
 
         # Save results loss
         fichero = open(path_result + '/files_gan_train_' + str(e) + '.pckl', 'wb')
