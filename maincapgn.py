@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import pickle
 import Models.capggan as model_cap
-
+import json
 ########################################################################
 ## TRAIN
 ########################################################################
@@ -19,10 +19,12 @@ import Datasets.dataCPF as datasets
 import utils.utils as utils
 from tqdm.autonotebook import tqdm
 
-
 ################################################
 # CONFIG 
 ################################################
+config = {
+            'epoch': 0
+        }
 lambda1 = 10
 lambda2 = 0.1
 lambda3 = 0.1
@@ -35,6 +37,24 @@ num_epochs  = 100
 batch_size  = 8
 print_epoch = 5
 load_checkpoint = True
+
+################################################
+# Load json 
+################################################
+path_json = 'config.json'
+def load_json():
+
+    with open(path_json) as config_file:
+        data = json.load(config_file)
+
+    config['epoch'] = data['epoch']
+
+def write_json():
+
+    with open(path_json, 'w') as outfile:
+        json.dump(config, outfile)
+
+################################################
 
 ################################################
 # DATASET 
@@ -88,6 +108,8 @@ optimizer = torch.optim.Adam(params, lr=lr)
 # 'optimizer': optimizer.state_dict()}
 # torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
 ###
+
+
 def train(epoch):
     model_gen.train()
     model_dii.train()
@@ -158,6 +180,9 @@ def train(epoch):
         'optimizer': optimizer.state_dict()}
         torch.save(state, path_result + "/model/checkpoint_dp" + str(epoch) + ".pth.tar" ) 
         
+
+        config['epoch'] = epoch
+        write_json()
     return value_loss
 
 def test(epoch):
@@ -238,12 +263,11 @@ def load_model(path, model, optimizer):
 
 
 if(load_checkpoint == True):
-
+    load_json();
     path_chck = path_result + "/model/checkpoint_"
-    epoch = 14
-    model_gen, optimizer, last_epoch = load_model(path_chck + "gen" + str(epoch) + ".pth.tar",model_gen, optimizer)
-    model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(epoch) + ".pth.tar",model_dii, optimizer)
-    model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(epoch) + ".pth.tar",model_dpe, optimizer)
+    model_gen, optimizer, last_epoch = load_model(path_chck + "gen" + str(config['epoch']) + ".pth.tar",model_gen, optimizer)
+    model_dii, optimizer, last_epoch = load_model(path_chck + "dii" + str(config['epoch']) + ".pth.tar",model_dii, optimizer)
+    model_dpe, optimizer, last_epoch = load_model(path_chck + "dp" + str(config['epoch']) + ".pth.tar",model_dpe, optimizer)
     
     start_epochs = last_epoch
 
@@ -258,20 +282,20 @@ for e in range(start_epochs, num_epochs):
     Loss_test.append(test_loss/len(testloader))
     
     if(e + 1) % print_epoch == 0:
-      #  x = np.arange(e + 1)
-       # fig = plt.figure()
-       # ax = plt.subplot(111)
-      #  ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
-      #  ax.plot(x, Loss_test, 'pink', label='Generator Test')
+        x = np.arange(e + 1)
+        fig = plt.figure()
+        ax = plt.subplot(111)
+        ax.plot(x, Loss_train, 'mediumvioletred', label='Generator Training')
+        ax.plot(x, Loss_test, 'pink', label='Generator Test')
 
-        # ax.plot(x, Loss_Disc, 'steelblue', label='Discriminator Training')
-        # ax.plot(x, Loss_Disc_Test, 'lightskyblue', label='Discriminator Test')
+        ax.plot(x, Loss_Disc, 'steelblue', label='Discriminator Training')
+        ax.plot(x, Loss_Disc_Test, 'lightskyblue', label='Discriminator Test')
 
-      #  plt.title('Function loss')
-      #  ax.legend()
-      #  fig.savefig(path_result + '/plot' + str(e) + '.png')
+        plt.title('Function loss')
+        ax.legend()
+        fig.savefig(path_result + '/plot' + str(e) + '.png')
         # plt.show()
-       # plt.close(fig)
+        plt.close(fig)
 
         # Save results loss
         fichero = open(path_result + '/files_gan_train_' + str(e) + '.pckl', 'wb')
